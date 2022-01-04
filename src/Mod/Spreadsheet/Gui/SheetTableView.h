@@ -81,6 +81,8 @@ protected Q_SLOTS:
     void removeColumns();
     void cellProperties();
     void onRecompute();
+    void onBind();
+    void onConfSetup();
 
 protected:
     bool edit(const QModelIndex &index, EditTrigger trigger, QEvent *event);
@@ -89,6 +91,8 @@ protected:
     void mousePressEvent(QMouseEvent* event);
 
     void contextMenuEvent (QContextMenuEvent * e);
+
+    void _copySelection(const std::vector<App::Range> &ranges, bool copy);
 
     QModelIndex currentEditIndex;
     Spreadsheet::Sheet * sheet;
@@ -102,6 +106,7 @@ protected:
     QAction *actionPaste;
     QAction *actionCut;
     QAction *actionDel;
+    QAction *actionBind;
 
     boost::signals2::scoped_connection cellSpanChangedConnection;
 };

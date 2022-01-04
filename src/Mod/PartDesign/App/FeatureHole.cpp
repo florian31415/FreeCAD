@@ -995,24 +995,40 @@ double Hole::getThreadPitch()
 
 void Hole::updateThreadDepthParam()
 {
-    std::string method(DepthType.getValueAsString());
-    double drillDepth;
-    if ( method == "Dimension" ) {
-        drillDepth = Depth.getValue();
-    } else if ( method == "ThroughAll" ) {
-        drillDepth = getThroughAllLength();
-    } else {
+    std::string ThreadMethod(ThreadDepthType.getValueAsString());
+    std::string HoleDepth(DepthType.getValueAsString());
+    if (HoleDepth == "Dimension") {
+        if (ThreadMethod == "Hole Depth") {
+            ThreadDepth.setValue(Depth.getValue());
+        }
+        else if (ThreadMethod == "Dimension") {
+            // the thread cannot be longer than the hole depth
+            if (ThreadDepth.getValue() > Depth.getValue())
+                ThreadDepth.setValue(Depth.getValue());
+            else
+                ThreadDepth.setValue(ThreadDepth.getValue());
+        }
+        else if (ThreadMethod == "Tapped (DIN76)") {
+            ThreadDepth.setValue(Depth.getValue() - getThreadRunout());
+        }
+        else {
+            throw Base::RuntimeError("Unsupported thread depth type \n");
+        }
+    }
+    else if (HoleDepth == "ThroughAll") {
+        if (ThreadMethod != "Dimension") {
+            ThreadDepth.setValue(getThroughAllLength());
+        }
+        else {
+            // the thread cannot be longer than the hole depth
+            if (ThreadDepth.getValue() > getThroughAllLength())
+                ThreadDepth.setValue(getThroughAllLength());
+            else
+                ThreadDepth.setValue(ThreadDepth.getValue());
+        }
+    }
+    else {
         throw Base::RuntimeError("Unsupported depth type \n");
-    }
-
-    if ( std::string(ThreadDepthType.getValueAsString()) == "Tapped (DIN76)" ) {
-        ThreadDepth.setValue(Depth.getValue() - getThreadRunout());
-    } else { // hole depth
-        ThreadDepth.setValue(Depth.getValue());
-    }
-
-    if ( method == "ThroughAll" ) {
-        ThreadDepth.setValue(drillDepth);
     }
 }
 
@@ -1439,24 +1455,39 @@ void Hole::onChanged(const App::Property *prop)
         updateHoleCutParams();
     }
     else if (prop == &DepthType) {
-        Depth.setReadOnly((std::string(DepthType.getValueAsString()) != "Dimension"));
-        DrillPoint.setReadOnly((std::string(DepthType.getValueAsString()) != "Dimension"));
-        DrillPointAngle.setReadOnly((std::string(DepthType.getValueAsString()) != "Dimension"));
-        DrillForDepth.setReadOnly((std::string(DepthType.getValueAsString()) != "Dimension"));
+        std::string DepthMode(DepthType.getValueAsString());
+        Depth.setReadOnly(DepthMode != "Dimension");
+        DrillPoint.setReadOnly(DepthMode != "Dimension");
+        DrillPointAngle.setReadOnly(DepthMode != "Dimension");
+        DrillForDepth.setReadOnly(DepthMode != "Dimension");
+        if (DepthMode != "Dimension") {
+            // if through all, set the depth accordingly
+            Depth.setValue(getThroughAllLength());
+            // the thread depth is not dimension, it is the same as the hole depth
+            ThreadDepth.setValue(getThroughAllLength());
+        }
         updateThreadDepthParam();
     }
     else if (prop == &Depth) {
-        if (std::string(ThreadDepthType.getValueAsString()) != "Dimension") {
+        // the depth cannot be greater than the through-all length
+        if (Depth.getValue() > getThroughAllLength())
+            Depth.setValue(getThroughAllLength());
+
+        if (std::string(ThreadDepthType.getValueAsString()) != "Dimension")
             updateDiameterParam();  // make sure diameter and pitch are updated.
-            updateThreadDepthParam();
-        }
+
+        // update the thread in every case
+        updateThreadDepthParam();
     }
     else if (prop == &ThreadDepthType) {
         updateThreadDepthParam();
-        ThreadDepth.setReadOnly(Threaded.getValue() && std::string(ThreadDepthType.getValueAsString()) != "Dimension");
+        ThreadDepth.setReadOnly(Threaded.getValue()
+            && std::string(ThreadDepthType.getValueAsString()) != "Dimension");
     }
     else if (prop == &ThreadDepth) {
-        // Nothing else needs to be updated on ThreadDepth change
+        // the thread depth cannot be greater than the hole depth
+        if (ThreadDepth.getValue() > Depth.getValue())
+            ThreadDepth.setValue(Depth.getValue());
     }
     else if (prop == &UseCustomThreadClearance) {
         updateDiameterParam();
@@ -1870,22 +1901,33 @@ App::DocumentObjectExecReturn *Hole::execute(void)
 
             //create the helix path
             double threadDepth = ThreadDepth.getValue();
-            double helixLength = threadDepth + P/2;
+            double helixLength = threadDepth + P / 2;
+            double holeDepth = Depth.getValue();
             std::string threadDepthMethod(ThreadDepthType.getValueAsString());
-            if ( threadDepthMethod != "Dimension" ) {
-                std::string depthMethod(DepthType.getValueAsString());
-                if ( depthMethod == "ThroughAll" ) {
+            std::string depthMethod(DepthType.getValueAsString());
+            if (threadDepthMethod != "Dimension") {
+                if (depthMethod == "ThroughAll") {
                     threadDepth = length;
                     ThreadDepth.setValue(threadDepth);
-                    helixLength = threadDepth + 2*P;
-                } else if ( threadDepthMethod == "Tapped (DIN76)" ) {
-                    threadDepth = Depth.getValue() - getThreadRunout();
+                    helixLength = threadDepth + 2 * P;
+                }
+                else if (threadDepthMethod == "Tapped (DIN76)") {
+                    threadDepth = holeDepth - getThreadRunout();
                     ThreadDepth.setValue(threadDepth);
-                    helixLength = threadDepth + P/2;
-                } else { // Hole depth
-                    threadDepth = Depth.getValue();
+                    helixLength = threadDepth + P / 2;
+                }
+                else { // Hole depth
+                    threadDepth = holeDepth;
                     ThreadDepth.setValue(threadDepth);
-                    helixLength = threadDepth + P/8;
+                    helixLength = threadDepth + P / 8;
+                }
+            }
+            else {
+                if (depthMethod == "Dimension") {
+                    // the thread must not be deeper than the hole
+                    // thus the max helixLength is holeDepth + P / 8;
+                    if (threadDepth > (holeDepth - P / 2))
+                        helixLength = holeDepth + P / 8;
                 }
             }
             TopoDS_Shape helix = TopoShape().makeLongHelix(P, helixLength, D / 2, 0.0, leftHanded);
@@ -1901,9 +1943,9 @@ App::DocumentObjectExecReturn *Hole::execute(void)
             helix.Move(loc1);
 
             // rotate the helix so that it is pointing in the zdir.
-            double angle = acos(dir_axis1*zDir);
+            double angle = acos(dir_axis1 * zDir);
             if (abs(angle) > Precision::Confusion()) {
-                gp_Dir rotAxis = dir_axis1^zDir;
+                gp_Dir rotAxis = dir_axis1 ^ zDir;
                 mov.SetRotation(gp_Ax1(origo, rotAxis), angle);
                 TopLoc_Location loc2(mov);
                 helix.Move(loc2);
@@ -1927,7 +1969,7 @@ App::DocumentObjectExecReturn *Hole::execute(void)
             backwires.push_back(TopoDS::Wire(sim.Last()));
             // build the end faces
             TopoDS_Shape front = Part::FaceMakerCheese::makeFace(frontwires);
-            TopoDS_Shape back  = Part::FaceMakerCheese::makeFace(backwires);
+            TopoDS_Shape back = Part::FaceMakerCheese::makeFace(backwires);
 
             // sew the shell and end faces
             BRepBuilderAPI_Sewing sewer;
@@ -1940,7 +1982,7 @@ App::DocumentObjectExecReturn *Hole::execute(void)
             // make the closed off shell into a solid
             BRepBuilderAPI_MakeSolid mkSolid;
             mkSolid.Add(TopoDS::Shell(sewer.SewedShape()));
-            if(!mkSolid.IsDone())
+            if (!mkSolid.IsDone())
                 return new App::DocumentObjectExecReturn("Error: Result is not a solid");
             TopoDS_Shape result = mkSolid.Shape();
 
@@ -1968,7 +2010,7 @@ App::DocumentObjectExecReturn *Hole::execute(void)
         TopTools_IndexedMapOfShape edgeMap;
         TopExp::MapShapes(profileshape, TopAbs_EDGE, edgeMap);
         Base::Placement SketchPos = profile->Placement.getValue();
-        for ( int i=1 ; i<=edgeMap.Extent() ; i++ ) {
+        for (int i = 1; i <= edgeMap.Extent(); i++) {
             Standard_Real c_start;
             Standard_Real c_end;
             TopoDS_Edge edge = TopoDS::Edge(edgeMap(i));
@@ -1983,8 +2025,8 @@ App::DocumentObjectExecReturn *Hole::execute(void)
 
 
             gp_Trsf localSketchTransformation;
-            localSketchTransformation.SetTranslation( gp_Pnt( 0, 0, 0 ),
-                                                      gp_Pnt(loc.X(), loc.Y(), loc.Z()) );
+            localSketchTransformation.SetTranslation(gp_Pnt(0, 0, 0),
+                gp_Pnt(loc.X(), loc.Y(), loc.Z()));
 
             TopoDS_Shape copy = protoHole;
             copy.Move(localSketchTransformation);

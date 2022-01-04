@@ -149,27 +149,27 @@ void TaskHelixParameters::connectSlots()
     QMetaObject::connectSlotsByName(this);
 
     connect(ui->pitch, SIGNAL(valueChanged(double)),
-            this, SLOT(onPitchChanged(double)));
+        this, SLOT(onPitchChanged(double)));
     connect(ui->height, SIGNAL(valueChanged(double)),
-            this, SLOT(onHeightChanged(double)));
+        this, SLOT(onHeightChanged(double)));
     connect(ui->turns, SIGNAL(valueChanged(double)),
-            this, SLOT(onTurnsChanged(double)));
+        this, SLOT(onTurnsChanged(double)));
     connect(ui->coneAngle, SIGNAL(valueChanged(double)),
-            this, SLOT(onAngleChanged(double)));
+        this, SLOT(onAngleChanged(double)));
     connect(ui->growth, SIGNAL(valueChanged(double)),
-            this, SLOT(onGrowthChanged(double)));
+        this, SLOT(onGrowthChanged(double)));
     connect(ui->axis, SIGNAL(activated(int)),
-            this, SLOT(onAxisChanged(int)));
+        this, SLOT(onAxisChanged(int)));
     connect(ui->checkBoxLeftHanded, SIGNAL(toggled(bool)),
-            this, SLOT(onLeftHandedChanged(bool)));
+        this, SLOT(onLeftHandedChanged(bool)));
     connect(ui->checkBoxReversed, SIGNAL(toggled(bool)),
-            this, SLOT(onReversedChanged(bool)));
+        this, SLOT(onReversedChanged(bool)));
     connect(ui->checkBoxUpdateView, SIGNAL(toggled(bool)),
-            this, SLOT(onUpdateView(bool)));
+        this, SLOT(onUpdateView(bool)));
     connect(ui->inputMode, SIGNAL(activated(int)),
-            this, SLOT(onModeChanged(int)));
+        this, SLOT(onModeChanged(int)));
     connect(ui->checkBoxOutside, SIGNAL(toggled(bool)),
-            this, SLOT(onOutsideChanged(bool)));
+        this, SLOT(onOutsideChanged(bool)));
 }
 
 void TaskHelixParameters::showCoordinateAxes()
@@ -277,9 +277,7 @@ int TaskHelixParameters::addCurrentLink()
     return indexOfCurrent;
 }
 
-void TaskHelixParameters::addAxisToCombo(App::DocumentObject* linkObj,
-                                         std::string linkSubname,
-                                         QString itemText)
+void TaskHelixParameters::addAxisToCombo(App::DocumentObject* linkObj, std::string linkSubname, QString itemText)
 {
     this->ui->axis->addItem(itemText);
     this->axesInList.emplace_back(new App::PropertyLinkSub);
@@ -425,9 +423,10 @@ void TaskHelixParameters::onAxisChanged(int num)
     App::PropertyLinkSub& lnk = *(axesInList[num]);
     if (lnk.getValue() == 0) {
         // enter reference selection mode
-        TaskSketchBasedParameters::onSelectReference(AllowSelection::EDGE |
-                                                     AllowSelection::PLANAR |
-                                                     AllowSelection::CIRCLE);
+        TaskSketchBasedParameters::onSelectReference(
+            AllowSelection::EDGE |
+            AllowSelection::PLANAR |
+            AllowSelection::CIRCLE);
         return;
     }
     else {
@@ -475,6 +474,8 @@ void TaskHelixParameters::onModeChanged(int index)
     ui->pitch->setValue(propPitch->getValue());
     ui->height->setValue(propHeight->getValue());
     ui->turns->setValue(propTurns->getValue());
+    ui->coneAngle->setValue(propAngle->getValue());
+    ui->growth->setValue(propGrowth->getValue());
 
     recomputeFeature();
     updateUI();

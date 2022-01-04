@@ -77,6 +77,7 @@ public:
         EvalOnRestore = 14, // In case of expression binding, evaluate the
                             // expression on restore and touch the object on value change.
         Busy = 15, // internal use to avoid recursive signaling
+        CopyOnChange = 16, // for Link to copy the linked object on change of the property with this flag
 
         // The following bits are corresponding to PropertyType set when the
         // property added. These types are meant to be static, and cannot be
@@ -234,6 +235,9 @@ public:
     virtual void hasSetChildValue(Property &) {}
     /// Called before a child property changing value
     virtual void aboutToSetChildValue(Property &) {}
+
+    /// Compare if this property has the same content as the given one
+    virtual bool isSame(const Property &other) const;
 
     friend class PropertyContainer;
     friend struct PropertyData;
@@ -490,6 +494,11 @@ public:
     const ListT &getValue(void) const{return getValues();}
 
     const_reference operator[] (int idx) const {return _lValueList[idx];} 
+
+    virtual bool isSame(const Property &other) const override {
+        return this->getTypeId() == other.getTypeId()
+            && this->getValue() == static_cast<decltype(this)>(&other)->getValue();
+    }
 
     virtual void setPyObject(PyObject *value) override {
         try {

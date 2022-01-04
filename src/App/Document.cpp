@@ -127,6 +127,7 @@ recompute path. Also, it enables more complicated dependencies beyond trees.
 #include "Origin.h"
 #include "OriginGroupExtension.h"
 #include "Link.h"
+#include "DocumentObserver.h"
 #include "GeoFeature.h"
 
 FC_LOG_LEVEL_INIT("App", true, true, true)
@@ -174,6 +175,7 @@ struct DocumentP
     std::unordered_map<std::string,DocumentObject*> objectMap;
     std::unordered_map<long,DocumentObject*> objectIdMap;
     std::unordered_map<std::string, bool> partialLoadObjects;
+    std::vector<DocumentObjectT> pendingRemove;
     long lastObjectId;
     DocumentObject* activeObject;
     Transaction *activeUndoTransaction;
@@ -1833,8 +1835,15 @@ void Document::exportObjects(const std::vector<App::DocumentObject*>& obj, std::
 
     if(FC_LOG_INSTANCE.isEnabled(FC_LOGLEVEL_LOG)) {
         for(auto o : obj) {
-            if(o && o->getNameInDocument())
+            if(o && o->getNameInDocument()) {
                 FC_LOG("exporting " << o->getFullName());
+                if (!o->getPropertyByName("_ObjectUUID")) {
+                    auto prop = static_cast<PropertyUUID*>(o->addDynamicProperty(
+                            "App::PropertyUUID", "_ObjectUUID", nullptr, nullptr,
+                            Prop_Output | Prop_Hidden));
+                    prop->setValue(Base::Uuid::createUuid());
+                }
+            }
         }
     }
 
@@ -2193,6 +2202,19 @@ Document::importObjects(Base::XMLReader& reader)
         if(o && o->getNameInDocument()) {
             o->setStatus(App::ObjImporting,true);
             FC_LOG("importing " << o->getFullName());
+            if (auto propUUID = Base::freecad_dynamic_cast<PropertyUUID>(
+                        o->getPropertyByName("_ObjectUUID")))
+            {
+                auto propSource = Base::freecad_dynamic_cast<PropertyUUID>(
+                        o->getPropertyByName("_SourceUUID"));
+                if (!propSource)
+                    propSource = static_cast<PropertyUUID*>(o->addDynamicProperty(
+                                "App::PropertyUUID", "_SourceUUID", nullptr, nullptr,
+                                Prop_Output | Prop_Hidden));
+                if (propSource)
+                    propSource->setValue(propUUID->getValue());
+                propUUID->setValue(Base::Uuid::createUuid());
+            }
         }
     }
 
@@ -3558,16 +3580,22 @@ int Document::recompute(const std::vector<App::DocumentObject*> &objs, bool forc
             continue;
         obj->setStatus(ObjectStatus::PendingRecompute,false);
         obj->setStatus(ObjectStatus::Recompute2,false);
-        if(obj->testStatus(ObjectStatus::PendingRemove))
-            obj->getDocument()->removeObject(obj->getNameInDocument());
     }
 
     signalRecomputed(*this,topoSortedObjects);
 
     FC_TIME_LOG(t,"Recompute total");
 
-    if (d->_RecomputeLog.size())
-        Base::Console().Log("Recompute failed! Please check report view.\n");
+    if(d->_RecomputeLog.size()) {
+        d->pendingRemove.clear();
+        Base::Console().Error("Recompute failed! Please check report view.\n");
+    } else {
+        for(auto &o : d->pendingRemove) {
+            auto obj = o.getObject();
+            if(obj)
+                obj->getDocument()->removeObject(obj->getNameInDocument());
+        }
+    }
 
     return objectCount;
 }
@@ -4097,7 +4125,7 @@ void Document::removeObject(const char* sName)
     if (pos->second->testStatus(ObjectStatus::PendingRecompute)) {
         // TODO: shall we allow removal if there is active undo transaction?
         FC_LOG("pending remove of " << sName << " after recomputing document " << getName());
-        pos->second->setStatus(ObjectStatus::PendingRemove,true);
+        d->pendingRemove.emplace_back(pos->second);
         return;
     }
 

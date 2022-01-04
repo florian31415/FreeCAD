@@ -117,6 +117,7 @@
 #include "ExpressionParser.h"
 #include "Transactions.h"
 #include <App/MaterialPy.h>
+#include <App/MetadataPy.h>
 #include <Base/GeometryPyCXX.h>
 #include "Link.h"
 
@@ -307,6 +308,7 @@ Application::Application(std::map<std::string,std::string> &mConfig)
     Base::Interpreter().addType(&Base::TypePy            ::Type,pBaseModule,"TypeId");
 
     Base::Interpreter().addType(&App::MaterialPy::Type, pAppModule, "Material");
+    Base::Interpreter().addType(&App::MetadataPy::Type, pAppModule, "Metadata");
 
     // Add document types
     Base::Interpreter().addType(&App::PropertyContainerPy::Type, pAppModule, "PropertyContainer");
@@ -3067,6 +3069,15 @@ std::tuple<QString, QString, QString, QString> getStandardPaths()
 #if defined(FC_OS_WIN32)
     configHome = getOldGenericDataLocation(QString());
     dataHome = configHome;
+
+    // On systems with non-7-bit-ASCII application data directories
+    // GetTempPathW will return a path in DOS format. This path will be
+    // accepted by boost's file_lock class.
+    // Since boost 1.76 there is now a version that accepts a wide string.
+#if (BOOST_VERSION < 107600)
+    tempPath = QString::fromStdString(Base::FileInfo::getTempPath());
+    cacheHome = tempPath;
+#endif
 #endif
 
     return std::make_tuple(configHome, dataHome, cacheHome, tempPath);

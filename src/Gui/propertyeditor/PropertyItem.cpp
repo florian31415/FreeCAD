@@ -350,10 +350,8 @@ QVariant PropertyItem::toString(const QVariant& prop) const
     std::ostringstream ss;
     Base::PyGILStateLocker lock;
     try {
-        Base::PyGILStateLocker lock;
-        Py::Object pyobj(propertyItems[0]->getPyObject(), true);
-        std::ostringstream ss;
-        if (pyobj.isNone()) {
+        Py::Object pyobj(propertyItems[0]->getPyObject(),true);
+        if(pyobj.isNone()) {
             ss << "<None>";
         }
         else if(pyobj.isSequence()) {
@@ -393,6 +391,7 @@ QVariant PropertyItem::toString(const QVariant& prop) const
         }
         else
             ss << pyobj.as_string();
+
     } catch (Py::Exception &) {
         Base::PyException e;
         ss.str("");
@@ -553,7 +552,10 @@ QVariant PropertyItem::data(int column, int role) const
 {
     // property name
     if (column == 0) {
-        if (role == Qt::BackgroundRole || role == Qt::ForegroundRole) {
+        if (role == Qt::TextColorRole && linked)
+            return QVariant::fromValue(QColor(0x20,0xaa,0x20));
+
+        if (role == Qt::BackgroundRole || role == Qt::TextColorRole) {
             if(PropertyView::showAll()
                 && propertyItems.size() == 1
                 && propertyItems.front()->testStatus(App::Property::PropDynamic)
@@ -2738,7 +2740,7 @@ QStringList PropertyEnumItem::getEnum() const
     auto prop = getFirstProperty();
     if (prop && prop->getTypeId().isDerivedFrom(App::PropertyEnumeration::getClassTypeId())) {
         const App::PropertyEnumeration* prop_enum = static_cast<const App::PropertyEnumeration*>(prop);
-        for(int i=0,last=prop_enum->getEnum().maxValue();i<=last;++i)
+        for(int i=0; i<prop_enum->getEnum().maxValue(); ++i)
             res.push_back(QString::fromUtf8(prop_enum->getEnums()[i]));
     }
     return res;

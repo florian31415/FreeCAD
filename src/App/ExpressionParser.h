@@ -274,6 +274,7 @@ public:
         CREATE, // create new object of a given type
         STR, // stringify
         HIDDENREF, // hidden reference that has no dependency check
+        HREF, // deprecated alias of HIDDENREF
 
         // Aggregates
         AGGREGATES,
@@ -299,6 +300,9 @@ public:
     virtual Expression * simplify() const override;
 
     static Py::Object evaluate(const Expression *owner, int type, const std::vector<Expression*> &args);
+
+    Function getFunction() const {return f;}
+    const std::vector<Expression*> &getArgs() const {return args;}
 
 protected:
     static Py::Object evalAggregate(const Expression *owner, int type, const std::vector<Expression*> &args);
